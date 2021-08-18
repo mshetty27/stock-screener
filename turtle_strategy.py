@@ -3,19 +3,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from tabulate import tabulate
-# import warnings
-# warnings.filterwarnings('ignore')
-import pandas_datareader.data as web
-import math
-import io
-import requests
 import csv
 import time
 import argparse
 import time
 import os
 from dotenv import load_dotenv
-
+from nsepy import get_history
 load_dotenv()
 
 price_limit_percentage = 1 + int(os.getenv('PRICE_LIMIT_PERCENTAGE', 4)) / 100
@@ -31,8 +25,8 @@ def GetStockList(csv):
 def FindTurtleStrategyEntry(stock_symbol, lastNDays, plot=False):
     end = datetime.now().date()
     start = end - timedelta(35 + lastNDays) #we need more data for moving average calculations
-    
-    stock_df = web.DataReader(stock_symbol, 'yahoo', start = start, end = end)
+  
+    stock_df = get_history(symbol=stock_symbol, start=start, end=end)
     stock_df = pd.DataFrame(stock_df)
     stock_df.dropna(axis = 0, inplace = True) # remove any null rows 
 
@@ -44,7 +38,7 @@ def FindTurtleStrategyEntry(stock_symbol, lastNDays, plot=False):
 
     #Take only last N records
     stock_df = stock_df.tail(lastNDays)
-    
+
     #signal
     stock_df["buy_signal"] = 0.0
     stock_df['buy_signal'] = np.where( 
@@ -55,12 +49,14 @@ def FindTurtleStrategyEntry(stock_symbol, lastNDays, plot=False):
             (stock_df['Close'] > stock_df['Open']) , 
             1.0, 0.0)
     stock_df['buy_position'] = stock_df['buy_signal'].diff()
+    # stock_df[stock_df < 0] = 0
+    stock_df = stock_df.fillna(0)
 
     stock_df["sell_signal"] = 0.0
     stock_df['sell_signal'] = np.where(stock_df['Close'] < stock_df['close_10ma'], 1.0, 0.0)
     stock_df['sell_position'] = stock_df['sell_signal'].diff()
 
-    stock_df[stock_df < 0] = 0
+    # stock_df[stock_df < 0] = 0
     stock_df = stock_df.fillna(0)
 
     #plot
@@ -120,7 +116,7 @@ if __name__ == "__main__":
         print(f'Working on {ticker}')
         ticker_start = time.time()
         try:
-            result = FindTurtleStrategyEntry(f'{ticker}.NS', args.days, False)
+            result = FindTurtleStrategyEntry(f'{ticker}', args.days, False)
         except Exception as exception:
             print(exception)
         if len(result) > 0:
